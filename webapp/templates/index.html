@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Ransomware Detector Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header>
+    <h1>🛡️ Ransomware Detector</h1>
+  </header>
+
+  <main>
+    <!-- Top Stats -->
+    <section class="stats">
+      <div class="card">
+        <h3>Total Events</h3>
+        <p id="stat-total">0</p>
+      </div>
+      <div class="card warning">
+        <h3>Rule Alerts</h3>
+        <p id="stat-rule">0</p>
+      </div>
+      <div class="card danger">
+        <h3>Model Alerts</h3>
+        <p id="stat-model">0</p>
+      </div>
+    </section>
+
+    <!-- Controls Panel -->
+    <section class="controls">
+      <h2>⚙️ Monitoring Controls</h2>
+      <div class="inputs">
+        <label>Sandbox Folder:
+          <input id="folder" value="./sandbox" />
+        </label>
+        <label>Window (s):
+          <input id="window" value="60" type="number" min="5" />
+        </label>
+      </div>
+      <div class="buttons">
+        <button onclick="startMonitor()">▶ Start Monitoring</button>
+        <button class="stop" onclick="stopMonitor()">⏹ Stop Monitoring</button>
+      </div>
+    </section>
+
+    <!-- Chart -->
+    <section class="chart-section">
+      <h2>📊 File Events Over Time</h2>
+      <canvas id="eventsChart"></canvas>
+    </section>
+
+    <!-- Alerts Section -->
+    <section class="alerts-section">
+      <h2>🚨 Alerts</h2>
+      <ul id="alerts"></ul>
+    </section>
+  </main>
+
+  <footer>
+    <p>🔒 Cybersecurity Mini Project – Real-time Ransomware Detection</p>
+  </footer>
+
+  <script>
+    // Chart setup
+    const ctx = document.getElementById('eventsChart');
+    const eventsChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: 'File Events',
+          data: [],
+          borderColor: '#2e6f9e',
+          backgroundColor: 'rgba(46,111,158,0.2)',
+          tension: 0.2,
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          x: { title: { display: true, text: 'Time' }},
+          y: { title: { display: true, text: 'Events' }, beginAtZero: true }
+        }
+      }
+    });
+
+    // Stats counters
+    let totalEvents = 0, ruleAlerts = 0, modelAlerts = 0;
+
+    async function startMonitor(){
+      const folder = document.getElementById("folder").value;
+      const window = Number(document.getElementById("window").value) || 60;
+      const res = await fetch("/start", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({folder, window})
+      });
+      const data = await res.json();
+      alert(data.status + (data.model_loaded ? " (model loaded)" : " (no model)"));
+    }
+    async function stopMonitor(){
+      const res = await fetch("/stop", {method:"POST"});
+      const data = await res.json();
+      alert(data.status);
+    }
+
+    // Poll alerts + update chart
+    setInterval(async ()=> {
+      const res = await fetch("/alerts");
+      const items = await res.json();
+      if(items.length){
+        const ul = document.getElementById("alerts");
+        items.reverse().forEach(it=>{
+          totalEvents++;
+          if(it.by_rule) ruleAlerts++;
+          if(it.by_model) modelAlerts++;
+
+          // Stats update
+          document.getElementById("stat-total").innerText = totalEvents;
+          document.getElementById("stat-rule").innerText = ruleAlerts;
+          document.getElementById("stat-model").innerText = modelAlerts;
+
+          // Chart update
+          const time = new Date(it.timestamp*1000).toLocaleTimeString();
+          const index = eventsChart.data.labels.indexOf(time);
+          if(index === -1){
+            eventsChart.data.labels.push(time);
+            eventsChart.data.datasets[0].data.push(1);
+          } else {
+            eventsChart.data.datasets[0].data[index]++;
+          }
+          eventsChart.update();
+
+          // Alerts list
+          const li = document.createElement("li");
+          li.classList.add(it.by_model ? "alert-model" : it.by_rule ? "alert-rule" : "alert-safe");
+          li.innerHTML = `
+            <span class="time">[${time}]</span>
+            <span class="type">${it.by_model ? "MODEL DETECTION" : it.by_rule ? "RULE DETECTION" : "SAFE"}</span>
+            <span class="path">${it.path}</span>
+          `;
+          ul.prepend(li);
+        });
+      }
+    }, 2000);
+  </script>
+</body>
+</html>

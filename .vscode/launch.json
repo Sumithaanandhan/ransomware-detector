@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Flask (webapp/app.py)",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/webapp/app.py",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Run detector (monitor folder)",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/detector.py",
+      "console": "integratedTerminal",
+      "args": ["${workspaceFolder}/sandbox"]
+    }
+  ]
+}
